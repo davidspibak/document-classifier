@@ -1,0 +1,19 @@
+# model weights and generated data - never commit these
+models/
+data/sqlite/*.db
+data/lancedb/
+data/inbox/*
+data/raw/*
+!data/inbox/.gitkeep
+!data/raw/.gitkeep
+
+# python
+__pycache__/
+*.pyc
+.venv/
+build/dist/
+*.spec
+
+# packaging output
+build/dist/
+build/*.exe

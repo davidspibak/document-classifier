@@ -1,0 +1,43 @@
+# Embeddings & reranking
+FlagEmbedding
+
+# Document parsing
+pymupdf
+python-docx
+python-pptx
+unstructured
+beautifulsoup4
+
+# OCR
+pytesseract
+easyocr
+opencv-python
+
+# Language detection
+fasttext
+
+# Vector database
+lancedb
+pyarrow
+
+# Metadata / keyword extraction
+keybert
+pypinyin
+
+# Data handling
+pandas
+pyyaml
+
+# Desktop UI
+pyside6
+
+# Taxonomy construction (clustering)
+scikit-learn
+hdbscan
+umap-learn
+
+# --- Installed separately, see docs/architecture.md ---
+# llama-cpp-python   -> needs CMAKE_ARGS="-DGGML_CUDA=on" for GPU offload
+# vllm               -> for batched bulk-classification jobs (e.g. initial 10M-doc run)
+# GROBID             -> runs as a local Java/Docker service, not a pip package
+# Tesseract binary   -> installed via winget / UB-Mannheim installer, not a pip package
