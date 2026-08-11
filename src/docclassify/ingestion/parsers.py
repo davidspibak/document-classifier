@@ -16,14 +16,16 @@ MIN_TEXT_LENGTH_PER_PAGE = 20
 
 
 def parse_pdf(path: str) -> dict:
-    doc = fitz.open(path)
     pages_text = []
     needs_ocr_pages = []
-    for i, page in enumerate(doc):
-        text = page.get_text().strip()
-        pages_text.append(text)
-        if len(text) < MIN_TEXT_LENGTH_PER_PAGE:
-            needs_ocr_pages.append(i)
+    # Context-managed so the file handle is released before ocr.py re-opens the
+    # same path — a bulk run that leaks one handle per document hits the OS limit.
+    with fitz.open(path) as doc:
+        for i, page in enumerate(doc):
+            text = page.get_text().strip()
+            pages_text.append(text)
+            if len(text) < MIN_TEXT_LENGTH_PER_PAGE:
+                needs_ocr_pages.append(i)
     return {
         "text": "\n\n".join(pages_text),
         "pages": pages_text,

@@ -5,6 +5,7 @@ extraction pass (fast, no LLM) with an LLM labeling pass (more coherent
 naming), so the LLM has concrete keywords to ground its proposal in rather
 than guessing from raw document snippets alone.
 """
+import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from docclassify.llm.local_llm import generate_json
@@ -21,7 +22,9 @@ def extract_cluster_keywords(cluster_documents: list[str], top_n: int = 12) -> l
         return []
     vectorizer = TfidfVectorizer(max_features=200, stop_words="english")
     tfidf = vectorizer.fit_transform(cluster_documents)
-    scores = tfidf.sum(axis=0).A1
+    # np.asarray(...).ravel() rather than the sparse-matrix-only `.A1`: newer scipy
+    # returns a sparse ARRAY here, which has no `.A1` attribute.
+    scores = np.asarray(tfidf.sum(axis=0)).ravel()
     terms = vectorizer.get_feature_names_out()
     ranked = sorted(zip(terms, scores), key=lambda x: -x[1])
     return [t for t, _ in ranked[:top_n]]

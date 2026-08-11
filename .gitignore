@@ -4,16 +4,27 @@ data/sqlite/*.db
 data/lancedb/
 data/inbox/*
 data/raw/*
+data/taxonomy_review.json
 !data/inbox/.gitkeep
 !data/raw/.gitkeep
+
+# offline bundle payload - gigabytes of wheels, installers and weights.
+# The scripts that FETCH them are committed; the artifacts are not.
+packages/*
+!packages/.gitkeep
 
 # python
 __pycache__/
 *.pyc
 .venv/
-build/dist/
-*.spec
 
 # packaging output
+/dist/
+build/work/
 build/dist/
 build/*.exe
+
+# PyInstaller spec files are usually generated throwaways, but build/main.spec is
+# hand-written and is the actual build definition - keep it.
+*.spec
+!build/main.spec

@@ -5,7 +5,6 @@ FlagEmbedding
 pymupdf
 python-docx
 python-pptx
-unstructured
 beautifulsoup4
 
 # OCR
@@ -14,7 +13,12 @@ easyocr
 opencv-python
 
 # Language detection
-fasttext
+# fasttext-wheel, NOT fasttext: the upstream `fasttext` package publishes only an
+# sdist, so installing it compiles C++ and therefore needs VS Build Tools — which
+# makes a disconnected install impossible. fasttext-wheel is the same library with
+# prebuilt binaries and the same `import fasttext` module name. Its newest wheels
+# are cp312, which is what pins the whole project to Python 3.12 (see §5.1).
+fasttext-wheel
 
 # Vector database
 lancedb
@@ -25,16 +29,23 @@ keybert
 pypinyin
 
 # Data handling
+numpy
 pandas
 pyyaml
+requests
 
 # Desktop UI
 pyside6
 
 # Taxonomy construction (clustering)
 scikit-learn
-hdbscan
-umap-learn
+hdbscan          # optional HDBSCAN cross-check in taxonomy/cluster.py (lazy-imported)
+
+# --- Not currently imported anywhere ---
+# Dropped from the install to keep the offline bundle smaller. Re-add if you
+# start using them:
+#   unstructured  -> a generic parser fallback; parsers.py uses pymupdf/docx/pptx/bs4 directly
+#   umap-learn    -> dimensionality reduction for cluster visualization
 
 # --- Installed separately, see docs/architecture.md ---
 # llama-cpp-python   -> needs CMAKE_ARGS="-DGGML_CUDA=on" for GPU offload

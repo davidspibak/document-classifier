@@ -15,6 +15,44 @@ import pyarrow as pa
 # update this constant — it must match the model's output dimension exactly.
 EMBEDDING_DIM = 1024
 
+# --- document status vocabulary -------------------------------------------------
+# Single source of truth for documents.status. The classifier reports its own
+# intermediate outcomes (OUTCOME_*), which the pipeline maps to one of these
+# persisted values via persisted_status() — that mapping is the only place the
+# two vocabularies meet, so they can't drift apart again.
+STATUS_PENDING = "pending"
+STATUS_AUTO_ASSIGNED = "auto_assigned"
+STATUS_LLM_ASSIGNED = "llm_assigned"
+STATUS_HUMAN_ASSIGNED = "human_assigned"
+STATUS_NEEDS_REVIEW = "needs_review"
+
+PERSISTED_STATUSES = (
+    STATUS_PENDING,
+    STATUS_AUTO_ASSIGNED,
+    STATUS_LLM_ASSIGNED,
+    STATUS_HUMAN_ASSIGNED,
+    STATUS_NEEDS_REVIEW,
+)
+
+# ClassificationResult.status values. The first two are also persisted verbatim;
+# the last two mean "this document still has no confident home".
+OUTCOME_AUTO_ASSIGNED = STATUS_AUTO_ASSIGNED
+OUTCOME_LLM_ASSIGNED = STATUS_LLM_ASSIGNED
+OUTCOME_AMBIGUOUS = "ambiguous"
+OUTCOME_NO_MATCH = "no_match"
+
+
+def persisted_status(outcome: str) -> str:
+    """
+    Maps a ClassificationResult.status onto the value stored in documents.status.
+    Anything the classifier couldn't resolve becomes STATUS_NEEDS_REVIEW, which is
+    what the Taxonomy view's review queue filters on.
+    """
+    if outcome in (OUTCOME_AUTO_ASSIGNED, OUTCOME_LLM_ASSIGNED):
+        return outcome
+    return STATUS_NEEDS_REVIEW
+
+
 SQL_SCHEMA = """
 CREATE TABLE IF NOT EXISTS documents (
     doc_id          TEXT PRIMARY KEY,
@@ -23,10 +61,13 @@ CREATE TABLE IF NOT EXISTS documents (
     language        TEXT,
     category_path   TEXT,               -- e.g. "Science/Physics/Quantum"
     confidence      REAL,
-    status          TEXT DEFAULT 'pending',  -- pending | auto_assigned | llm_assigned | needs_review
+    status          TEXT DEFAULT 'pending',  -- see PERSISTED_STATUSES above
     upload_batch    TEXT,
     created_at      TEXT,
-    -- metadata extraction fields (see metadata/ package)
+    -- Metadata extraction fields (see metadata/extract.py). The *_zh suffix is
+    -- historical: these hold the ORIGINAL-language values whatever that language
+    -- is, and the *_en columns hold the English mirror (a copy for English
+    -- documents, an LLM translation otherwise).
     title_zh        TEXT,
     title_en        TEXT,
     authors_zh      TEXT,               -- JSON array string
@@ -52,7 +93,7 @@ CREATE TABLE IF NOT EXISTS taxonomy (
 
 CREATE TABLE IF NOT EXISTS review_queue (
     doc_id          TEXT PRIMARY KEY,
-    reason          TEXT,               -- e.g. "low_confidence", "llm_no_match", "low_ocr_confidence"
+    reason          TEXT,               -- comma-separated, e.g. "llm_no_match,low_ocr_confidence"
     candidate_categories TEXT,          -- JSON array of category_ids considered
     created_at      TEXT,
     resolved        INTEGER DEFAULT 0,
@@ -76,6 +117,10 @@ DOC_VECTORS_SCHEMA = pa.schema([
     pa.field("language", pa.string()),
 ])
 
+# category_path is denormalized onto every chunk row on purpose: search filters by
+# category, and LanceDB can only push a filter down if the column lives in the
+# table being scanned. lancedb_store.update_doc_category() keeps it in sync when a
+# document is re-classified.
 CHUNK_VECTORS_SCHEMA = pa.schema([
     pa.field("chunk_id", pa.string()),
     pa.field("doc_id", pa.string()),
@@ -83,6 +128,7 @@ CHUNK_VECTORS_SCHEMA = pa.schema([
     pa.field("vector", pa.list_(pa.float32(), EMBEDDING_DIM)),
     pa.field("chunk_text", pa.string()),
     pa.field("language", pa.string()),
+    pa.field("category_path", pa.string()),
 ])
 
 CATEGORY_VECTORS_SCHEMA = pa.schema([

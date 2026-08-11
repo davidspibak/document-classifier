@@ -1,0 +1,14 @@
+# Build- and test-time tooling, kept out of requirements.txt so a runtime install
+# stays lean. BOTH files are fetched into the offline bundle, because packaging the
+# .exe and running the test suite on a disconnected machine needs these present.
+
+# venv bootstrapping (a fresh venv can't reach PyPI to upgrade itself offline)
+pip
+setuptools
+wheel
+
+# packaging
+pyinstaller
+
+# tests
+pytest

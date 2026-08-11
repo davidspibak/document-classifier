@@ -1,10 +1,15 @@
 """
 Access layer over LanceDB (embedded, single-file vector store — no server process).
 Owns three tables: doc_vectors, chunk_vectors, category_vectors.
+
+Every filter string built here goes through storage/filters.py rather than raw
+f-string interpolation, so values containing quotes can't break (or rewrite) the
+predicate.
 """
 import lancedb
 
 from docclassify.config import CONFIG
+from docclassify.storage.filters import sql_literal
 from docclassify.storage.schema import (
     DOC_VECTORS_SCHEMA,
     CHUNK_VECTORS_SCHEMA,
@@ -45,22 +50,25 @@ def upsert_doc_vector(doc_id: str, vector: list[float], category_path: str, lang
     table = doc_vectors_table()
     # LanceDB has no native upsert; delete-then-add is the standard pattern for
     # replacing a row (e.g. re-classifying a document after a taxonomy edit).
-    table.delete(f"doc_id = '{doc_id}'")
+    table.delete(f"doc_id = {sql_literal(doc_id)}")
     table.add([{
         "doc_id": doc_id, "vector": vector,
         "category_path": category_path, "language": language,
     }])
 
 
-def upsert_chunk_vectors(doc_id: str, chunks: list[dict]):
+def upsert_chunk_vectors(doc_id: str, chunks: list[dict], category_path: str = ""):
     """
     chunks: list of {"chunk_index": int, "vector": list[float], "chunk_text": str, "language": str}
+    category_path is denormalized onto every chunk row so search can push a
+    category filter down into LanceDB (see CHUNK_VECTORS_SCHEMA).
+
     Replaces ALL existing chunks for this doc_id before inserting the new set —
     important when re-processing a document (e.g. after an edit), so stale
     chunks don't linger and pollute search results.
     """
     table = chunk_vectors_table()
-    table.delete(f"doc_id = '{doc_id}'")
+    table.delete(f"doc_id = {sql_literal(doc_id)}")
     rows = [
         {
             "chunk_id": f"{doc_id}_chunk_{c['chunk_index']:04d}",
@@ -69,6 +77,7 @@ def upsert_chunk_vectors(doc_id: str, chunks: list[dict]):
             "vector": c["vector"],
             "chunk_text": c["chunk_text"],
             "language": c.get("language", "unknown"),
+            "category_path": category_path or "",
         }
         for c in chunks
     ]
@@ -76,15 +85,28 @@ def upsert_chunk_vectors(doc_id: str, chunks: list[dict]):
         table.add(rows)
 
 
+def update_doc_category(doc_id: str, category_path: str):
+    """
+    Re-points a document's denormalized category_path in BOTH vector tables after
+    a re-classification (the LLM tie-break pass, or a human resolving a review
+    item). Without this the vectors keep the stale category and search's category
+    filter silently disagrees with SQLite.
+    """
+    where = f"doc_id = {sql_literal(doc_id)}"
+    values = {"category_path": category_path or ""}
+    doc_vectors_table().update(where=where, values=values)
+    chunk_vectors_table().update(where=where, values=values)
+
+
 def upsert_category_vector(category_id: str, vector: list[float]):
     table = category_vectors_table()
-    table.delete(f"category_id = '{category_id}'")
+    table.delete(f"category_id = {sql_literal(category_id)}")
     table.add([{"category_id": category_id, "vector": vector}])
 
 
 def get_doc_vector(doc_id: str) -> list[float] | None:
     table = doc_vectors_table()
-    results = table.search().where(f"doc_id = '{doc_id}'").limit(1).to_list()
+    results = table.search().where(f"doc_id = {sql_literal(doc_id)}").limit(1).to_list()
     return results[0]["vector"] if results else None
 
 

@@ -38,11 +38,17 @@ def upsert_document(doc: dict):
     """
     Insert a new document row, or update it if doc_id already exists
     (e.g. re-classification after a taxonomy edit).
+
+    A partial dict (doc_id plus only the columns you want to change) is the normal
+    way to update an EXISTING row. Passing a partial dict for a doc_id that
+    doesn't exist yet raises on the NOT NULL filename/source_hash columns — that
+    is deliberate, since it means a caller is updating a document that was never
+    ingested.
     """
     doc = dict(doc)  # don't mutate caller's dict
     doc.setdefault("created_at", datetime.now(timezone.utc).isoformat())
     # JSON-encode any list fields (authors, keywords) before storing
-    for key in ("keywords_zh", "keywords_en"):
+    for key in ("authors_zh", "keywords_zh", "keywords_en"):
         if key in doc and isinstance(doc[key], list):
             doc[key] = json.dumps(doc[key], ensure_ascii=False)
  

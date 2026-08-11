@@ -4,6 +4,10 @@
 models:
   embedding: "./models/bge-m3"
   reranker: "./models/bge-reranker-v2-m3"
+  # The logical single-file name. Qwen publishes this quantization SPLIT into
+  # shards (qwen2.5-7b-instruct-q4_k_m-00001-of-00002.gguf), so this exact file
+  # may not exist on disk — llm/local_llm.py's resolve_gguf_path() finds the first
+  # shard and llama.cpp loads the rest. Works unchanged for either layout.
   llm_gguf: "./models/qwen2.5-7b-instruct-q4_k_m.gguf"
   lang_id: "./models/lid.176.bin"
 
@@ -25,6 +29,18 @@ classification:
 search:
   ann_candidate_count: 50
   final_result_count: 10
+
+# Metadata extraction during ingestion (title/authors/keywords/date).
+# Each LLM-backed step costs a generation call per document, so a
+# multi-million-document bulk run can switch the expensive parts off here
+# without touching code.
+metadata:
+  enabled: true
+  use_grobid: true            # try local GROBID first for PDFs (scholarly formatting)
+  use_llm_fallback: true      # local LLM header extraction when GROBID is absent/fails
+  extract_keywords: true      # KeyBERT keywords when the document lists none
+  translate_to_english: true  # populate the *_en mirror fields for non-English documents
+  llm_snippet_chars: 3000     # how much of the document head the LLM extractor sees
 
 report:
   output_language: "en"
