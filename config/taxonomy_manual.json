@@ -1,0 +1,71 @@
+{
+  "_comment": [
+    "Hand-written fixed taxonomy for a small evaluation set spanning economics, biology",
+    "and mathematics. Import it with:",
+    "    python scripts/import_taxonomy.py --file config/taxonomy_manual.json --replace",
+    "",
+    "The descriptions are written deliberately long, in the register and vocabulary of the",
+    "documents they are meant to attract, rather than as dictionary definitions. With no",
+    "seed documents, a category's vector IS its description embedded, and a terse phrase",
+    "sits far away in vector space from a real paper — which depresses every similarity",
+    "score and pushes documents into the LLM tie-breaker. If you can spare two or three",
+    "representative documents per category, add a \"seed_documents\" list of paths to a node;",
+    "that helps more than any amount of description tuning."
+  ],
+  "categories": [
+    {
+      "name": "Economics",
+      "description": "Research on the production, distribution and consumption of goods and services, and on the behaviour of markets, firms, households and governments. Typical documents present economic models, empirical estimates from survey or panel data, policy analysis, discussion of prices, demand, supply, employment, inflation, trade, taxation, welfare, growth and market equilibrium, often with regression tables and elasticity estimates.",
+      "children": [
+        {
+          "name": "Macroeconomics and Policy",
+          "description": "Economy-wide phenomena and the policies that act on them: gross domestic product and growth, inflation and price levels, unemployment, business cycles, aggregate demand and supply, monetary policy and interest rates set by central banks, fiscal policy, government debt and deficits, exchange rates, international trade balances and macroprudential regulation. Documents typically discuss national accounts, time-series evidence over years or quarters, and the transmission of shocks through an economy."
+        },
+        {
+          "name": "Microeconomics and Industrial Organisation",
+          "description": "The behaviour of individual agents and markets: consumer choice and utility, firm production and cost functions, competition and market structure, monopoly and oligopoly, pricing strategy, auctions and mechanism design, game-theoretic models of strategic interaction, labour supply decisions, contracts and incentives, information asymmetry, and the welfare consequences of regulation on a specific industry."
+        },
+        {
+          "name": "Econometrics and Finance",
+          "description": "Quantitative measurement of economic and financial relationships, and the workings of financial markets. Covers regression and instrumental-variable estimation, panel and time-series methods, causal inference and identification strategies, forecasting, plus asset pricing, portfolio choice, risk and volatility modelling, derivatives, interest-rate term structure, corporate finance, banking and credit. Documents typically report estimated coefficients, standard errors, significance tests and model diagnostics."
+        }
+      ]
+    },
+    {
+      "name": "Biology",
+      "description": "Study of living organisms and the processes that sustain them, from molecules and cells through organisms to populations and ecosystems. Typical documents report laboratory or field experiments, describe genes, proteins, cells, tissues, species and habitats, present microscopy, sequencing or assay results, and discuss mechanisms, phenotypes, physiology, disease and biological function.",
+      "children": [
+        {
+          "name": "Molecular and Cell Biology",
+          "description": "Processes inside the cell and the molecules that carry them out: DNA replication, transcription and translation, gene regulation and expression, protein structure, folding and function, enzymes and metabolic pathways, signal transduction, membranes and organelles, the cell cycle, apoptosis, and the molecular basis of disease. Documents typically report assays, western blots, microscopy images, knockdown or knockout experiments and cultured cell lines."
+        },
+        {
+          "name": "Ecology and Evolution",
+          "description": "Organisms in relation to one another and to their environment, and how they change over time: population dynamics, species interactions such as predation, competition and symbiosis, community structure and biodiversity, ecosystems, nutrient cycles and energy flow, habitat and conservation, climate effects on species ranges, natural selection, adaptation, speciation, phylogenetics and the evolutionary history of lineages. Documents typically report field surveys, ecological sampling, biodiversity indices or phylogenetic trees."
+        },
+        {
+          "name": "Genetics and Genomics",
+          "description": "Heredity and the structure, function and variation of genomes: Mendelian and quantitative inheritance, mutation and recombination, alleles and genotypes, chromosome organisation, genome sequencing and assembly, genome-wide association studies, transcriptomics and gene expression profiling, epigenetics, population genetics, and genetic contributions to traits and disease. Documents typically report sequence data, variant calls, linkage or association statistics and comparisons between genomes."
+        }
+      ]
+    },
+    {
+      "name": "Mathematics",
+      "description": "Abstract study of structure, quantity, space and change, developed through definitions, theorems and rigorous proof. Typical documents state lemmas, propositions and theorems with formal proofs, introduce notation and axioms, construct counterexamples, and reason about existence, uniqueness, convergence and generality rather than about empirical measurement.",
+      "children": [
+        {
+          "name": "Algebra and Number Theory",
+          "description": "Algebraic structures and the properties of integers: groups, rings, fields, modules and vector spaces, homomorphisms and quotient structures, Galois theory, representation theory, linear algebra over general fields, commutative algebra, prime numbers and divisibility, congruences and modular arithmetic, Diophantine equations, algebraic number fields, and L-functions. Documents typically develop structural results and prove theorems about them."
+        },
+        {
+          "name": "Analysis and Geometry",
+          "description": "Limits, continuity and the study of shape and space: real and complex analysis, sequences and series, convergence, measure and integration, functional analysis and operator theory, ordinary and partial differential equations, harmonic analysis, plus differential geometry, manifolds, curvature, topology, homology and geometric structures. Documents typically establish inequalities, bounds, existence and regularity results for functions, solutions or spaces."
+        },
+        {
+          "name": "Probability and Statistics",
+          "description": "Randomness and inference from data, treated mathematically: probability spaces and measures, random variables and distributions, expectation and moments, laws of large numbers and central limit theorems, stochastic processes, Markov chains, martingales and random walks, together with estimation theory, hypothesis testing, confidence intervals, Bayesian inference, asymptotic theory and the mathematical properties of statistical procedures. Documents typically derive distributional results or prove properties of estimators."
+        }
+      ]
+    }
+  ]
+}

@@ -12,6 +12,14 @@ from datetime import datetime, timezone
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+# Documents, category names and generated summaries in this project are multilingual
+# by design. Force UTF-8 on the console: Windows defaults to cp1252, which raises
+# UnicodeEncodeError the moment a CJK character is printed.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
+
 from docclassify.config import CONFIG
 from docclassify.pipeline import process_folder
 from docclassify.reports.monthly_report import generate_monthly_report
