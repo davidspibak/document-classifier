@@ -11,6 +11,43 @@ from docclassify.config import CONFIG
 _model = None
 
 
+def _patch_fasttext_numpy2() -> None:
+    """
+    fasttext-wheel 0.9.2's _FastText.predict ends with
+    `np.array(probs, copy=False)`. Under NumPy 2.x `copy=False` means "raise if a
+    copy is unavoidable" rather than the old "copy only if needed", so it fails
+    with "Unable to avoid copy while creating an array as requested."
+
+    We swap the numpy reference *inside fasttext's own module namespace* for a
+    thin proxy that translates only that one `copy=False` call to copy-if-needed
+    (`copy=None`) semantics — behaviour-identical on NumPy 1.x. Scoping it to
+    fasttext (rather than mutating the global numpy module) keeps every other
+    numpy caller, including concurrent worker threads, untouched.
+    """
+    from fasttext import FastText as _ft
+
+    if getattr(_ft, "_docclassify_numpy2_patched", False):
+        return
+
+    import numpy as np
+
+    class _NumpyCompat:
+        def __getattr__(self, name):
+            return getattr(np, name)
+
+        @staticmethod
+        def array(obj, *a, **kw):
+            if kw.get("copy") is False:
+                kw["copy"] = None  # NumPy 2.x: copy only when necessary
+            return np.array(obj, *a, **kw)
+
+    _ft.np = _NumpyCompat()
+    _ft._docclassify_numpy2_patched = True
+
+
+_patch_fasttext_numpy2()
+
+
 def _get_model():
     global _model
     if _model is None:
