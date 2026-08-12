@@ -13,10 +13,24 @@ from docclassify.config import CONFIG
 _model = None
 
 
+def _use_fp16() -> bool:
+    """
+    fp16 is a straight win on GPU and broken on CPU: PyTorch has no half-precision
+    matmul kernel for CPU, so a half-cast model raises
+    "addmm_impl_cpu_ not implemented for 'Half'" on the first encode. Decide from the
+    hardware rather than hard-coding it, so the same code runs on a CPU-only box.
+    """
+    try:
+        import torch
+        return torch.cuda.is_available()
+    except ImportError:
+        return False
+
+
 def get_model() -> BGEM3FlagModel:
     global _model
     if _model is None:
-        _model = BGEM3FlagModel(CONFIG["models"]["embedding"], use_fp16=True)
+        _model = BGEM3FlagModel(CONFIG["models"]["embedding"], use_fp16=_use_fp16())
     return _model
 
 

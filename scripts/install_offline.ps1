@@ -21,6 +21,12 @@
     After the main install, force-reinstall torch from packages\wheels-torch-cuda\
     (only present if the bundle was fetched with -TorchCuda).
 
+.PARAMETER CpuLlm
+    Install the CPU-only llama-cpp-python from packages\wheels-llama-cpu\ instead of
+    the CUDA build in packages\wheels\. Use this on a machine with no NVIDIA GPU: the
+    CUDA build is 512 MB and can fail to initialise without a driver present, whereas
+    the CPU build is 6 MB and always works.
+
 .PARAMETER SkipVerify
     Don't run the post-install import check.
 
@@ -31,6 +37,7 @@
 param(
     [string]$PythonExe = "",
     [switch]$TorchCuda,
+    [switch]$CpuLlm,
     [switch]$SkipVerify
 )
 
@@ -40,6 +47,7 @@ $ProjectRoot  = Split-Path -Parent $PSScriptRoot
 $PackagesDir  = Join-Path $ProjectRoot "packages"
 $WheelDir     = Join-Path $PackagesDir "wheels"
 $TorchCudaDir = Join-Path $PackagesDir "wheels-torch-cuda"
+$LlamaCpuDir  = Join-Path $PackagesDir "wheels-llama-cpu"
 $ToolsDir     = Join-Path $PackagesDir "tools"
 $ManifestPath = Join-Path $PackagesDir "MANIFEST.txt"
 $VenvDir      = Join-Path $ProjectRoot ".venv"
@@ -138,15 +146,25 @@ Write-Step "Installing runtime and build dependencies (no network)"
 Assert-LastExitCode "pip install requirements"
 
 Write-Step "Installing llama-cpp-python"
-$llamaWheel = Get-ChildItem -File -Filter "llama_cpp_python-*.whl" $WheelDir | Select-Object -First 1
+$llamaSearchDir = $WheelDir
+if ($CpuLlm) {
+    if (Test-Path $LlamaCpuDir) {
+        $llamaSearchDir = $LlamaCpuDir
+        Write-Host "  using the CPU-only build from packages\wheels-llama-cpu\ (-CpuLlm)"
+    } else {
+        Write-Warning "-CpuLlm was passed but $LlamaCpuDir does not exist."
+        Write-Warning "Falling back to the CUDA build, which may fail without an NVIDIA driver."
+    }
+}
+$llamaWheel = Get-ChildItem -File -Filter "llama_cpp_python-*.whl" $llamaSearchDir | Select-Object -First 1
 if ($null -eq $llamaWheel) {
     Write-Warning "No llama-cpp-python wheel in the bundle. The local LLM (tie-breaker,"
     Write-Warning "report generation, metadata fallback) will be unavailable. Everything"
     Write-Warning "else - ingestion, embedding classification, search - still works."
 } else {
-    & $VenvPython -m pip install --no-index --find-links $WheelDir $llamaWheel.FullName
+    & $VenvPython -m pip install --no-index --find-links $WheelDir --find-links $llamaSearchDir $llamaWheel.FullName
     Assert-LastExitCode "pip install llama-cpp-python"
-    Write-Host "  installed $($llamaWheel.Name)"
+    Write-Host ("  installed {0} ({1:N0} MB)" -f $llamaWheel.Name, ($llamaWheel.Length / 1MB))
 }
 
 if ($TorchCuda) {
