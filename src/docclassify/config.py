@@ -38,6 +38,7 @@ def _load_config() -> dict:
 
     resolve(raw.get("models", {}), ["embedding", "reranker", "llm_gguf", "lang_id"])
     resolve(raw.get("storage", {}), ["sqlite_path", "lancedb_path", "inbox_dir", "raw_dir"])
+    resolve(raw.get("ocr", {}), ["easyocr_model_dir"])
     return raw
 
 

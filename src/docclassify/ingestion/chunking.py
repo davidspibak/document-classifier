@@ -44,6 +44,30 @@ def chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = OVERLAP) 
     return chunks
 
 
+def join_chunks(chunk_texts: list[str], overlap: int = OVERLAP) -> str:
+    """
+    Inverse of chunk_text(): rebuilds the original word sequence from its chunks.
+
+    Needed because the full document text is never persisted — only chunks are — so
+    anything wanting the whole document (the on-demand summary, a UI preview) has to
+    reconstruct it.
+
+    Consecutive chunks share `overlap` words by construction, so a naive join would
+    repeat those words at every boundary. Since chunking used a fixed stride, dropping
+    the leading `overlap` words of every chunk after the first restores the original
+    sequence exactly. Whitespace is normalised to single spaces, because that is all
+    the chunks preserved.
+    """
+    if not chunk_texts:
+        return ""
+
+    words = chunk_texts[0].split()
+    for chunk in chunk_texts[1:]:
+        chunk_words = chunk.split()
+        words.extend(chunk_words[overlap:] if overlap > 0 else chunk_words)
+    return " ".join(words)
+
+
 def needs_pooling(text: str) -> bool:
     """True if the document is too long to embed whole and must be chunked + pooled instead."""
     return len(text.split()) > WHOLE_DOC_WORD_LIMIT

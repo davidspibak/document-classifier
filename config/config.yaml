@@ -48,3 +48,17 @@ report:
 
 ocr:
   confidence_flag_threshold: 60    # below this, flag document for human review
+  # EasyOCR (the fallback for pages Tesseract read poorly) keeps its weights in
+  # ~/.EasyOCR by default and downloads them from GitHub on first use. Both are
+  # wrong for an offline app, so the weights live inside models/ and downloads are
+  # off. Populate with: python scripts/fetch_models.py --only easyocr
+  # If the weights are absent, OCR keeps the Tesseract result rather than failing.
+  easyocr_model_dir: "./models/easyocr"
+  easyocr_allow_download: false
+
+# Hard-enforces offline operation by setting HF_HUB_OFFLINE / TRANSFORMERS_OFFLINE
+# at package import (see src/docclassify/__init__.py). With this on, any dependency
+# that tries to reach the Hugging Face Hub fails immediately and visibly instead of
+# quietly downloading a model mid-run. Turn it off only if you intend to download.
+offline:
+  enforce: true

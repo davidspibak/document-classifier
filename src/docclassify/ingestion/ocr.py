@@ -15,6 +15,15 @@ from docclassify.config import CONFIG
 
 CONFIDENCE_FLAG_THRESHOLD = CONFIG["ocr"]["confidence_flag_threshold"]
 
+# EasyOCR stores its detector/recogniser weights OUTSIDE the project by default
+# (~/.EasyOCR) and downloads them from GitHub on first use, with download_enabled
+# defaulting to True. That is a runtime network call the offline guarantee cannot
+# tolerate, and weights living outside models/ do not travel with the bundle.
+# Both are redirected through config.
+_OCR_CONFIG = CONFIG.get("ocr", {}) or {}
+EASYOCR_MODEL_DIR = _OCR_CONFIG.get("easyocr_model_dir")
+EASYOCR_ALLOW_DOWNLOAD = bool(_OCR_CONFIG.get("easyocr_allow_download", False))
+
 # Skew below this is not worth correcting — rotating resamples the whole page and
 # costs a little sharpness, which hurts OCR more than a fraction of a degree does.
 MIN_DESKEW_ANGLE_DEGREES = 0.3
@@ -23,15 +32,39 @@ _easyocr_reader = None  # lazy-loaded, only if we actually need the fallback
 
 
 def _get_easyocr_reader(languages: list[str]):
+    """
+    Returns a configured EasyOCR reader, or None if it cannot be constructed.
+
+    None is a valid answer: EasyOCR is only ever the *fallback* for pages Tesseract
+    read poorly, so if its weights are absent (or downloads are disabled, which is
+    the default) the right behaviour is to keep Tesseract's result rather than fail
+    the whole document.
+    """
     global _easyocr_reader
     if _easyocr_reader is None:
         import easyocr
+
+        kwargs = {"download_enabled": EASYOCR_ALLOW_DOWNLOAD}
+        if EASYOCR_MODEL_DIR:
+            kwargs["model_storage_directory"] = EASYOCR_MODEL_DIR
+
         try:
-            _easyocr_reader = easyocr.Reader(languages, gpu=True)
-        except Exception:  # noqa: BLE001 - no CUDA / VRAM exhausted / driver mismatch
+            _easyocr_reader = easyocr.Reader(languages, gpu=True, **kwargs)
+        except FileNotFoundError as e:
+            # download_enabled=False and the weights are not in models/easyocr.
+            print(f"[ocr] EasyOCR fallback unavailable: {e}")
+            print("[ocr] Fetch its weights once with: python scripts/fetch_models.py --only easyocr")
+            print("[ocr] Keeping the Tesseract result for this page.")
+            return None
+        except Exception as e:  # noqa: BLE001 - no CUDA / VRAM exhausted / driver mismatch
             # Slower, but a missing GPU shouldn't turn the OCR fallback into a
             # hard failure for the whole document.
-            _easyocr_reader = easyocr.Reader(languages, gpu=False)
+            try:
+                _easyocr_reader = easyocr.Reader(languages, gpu=False, **kwargs)
+            except Exception as cpu_error:  # noqa: BLE001
+                print(f"[ocr] EasyOCR unavailable ({type(e).__name__} on GPU, "
+                      f"{type(cpu_error).__name__} on CPU); keeping the Tesseract result.")
+                return None
     return _easyocr_reader
 
 
@@ -115,6 +148,8 @@ def _ocr_image(raw_img: np.ndarray, tesseract_lang: str = "eng") -> dict:
     # Low confidence -> retry with EasyOCR, which tends to handle noisy/rotated
     # scans better since it's a learned model rather than heuristic-based.
     reader = _get_easyocr_reader([tesseract_lang[:2]])  # crude lang-code mapping; refine per your corpus
+    if reader is None:  # weights absent or downloads disabled — keep what Tesseract found
+        return {"text": text, "confidence": avg_conf, "engine": "tesseract"}
     results = reader.readtext(processed, detail=1)
     if not results:
         return {"text": text, "confidence": avg_conf, "engine": "tesseract"}  # keep original if EasyOCR finds nothing

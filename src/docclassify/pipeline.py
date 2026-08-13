@@ -116,15 +116,56 @@ def process_document(file_path: str, upload_batch: str | None = None) -> dict:
     return doc_record
 
 
+DEFAULT_EXTENSIONS = (".pdf", ".docx", ".pptx", ".html", ".htm", ".txt", ".md")
+
+
 def process_folder(folder_path: str, upload_batch: str | None = None,
-                    extensions: tuple[str, ...] = (".pdf", ".docx", ".pptx", ".html", ".htm", ".txt", ".md")) -> list[dict]:
-    """Sequential convenience wrapper for a small/medium folder. For 10M-doc scale, use scripts/bulk_init_classify.py instead."""
+                    extensions: tuple[str, ...] = DEFAULT_EXTENSIONS,
+                    on_progress=None, should_cancel=None) -> list[dict]:
+    """
+    Sequential convenience wrapper for a small/medium folder. For 10M-doc scale, use
+    scripts/bulk_init_classify.py instead.
+
+    on_progress(done, total, path, status, record, error) is called after every file,
+    where status is "ingested", "duplicate" or "failed". A long-running ingestion is
+    otherwise completely opaque to a caller — the UI in particular had nothing to
+    report between "starting" and "finished".
+
+    should_cancel() is polled before each file; return True to stop early. Already
+    processed documents stay ingested, since each is committed as it completes.
+
+    NOTE on "duplicate": process_document returns the EXISTING row when content is a
+    duplicate, so it is recognised here by that row carrying a different
+    upload_batch than the one requested. That inference needs upload_batch to be
+    passed, and cannot distinguish a re-run of the very same batch id.
+    """
     folder = Path(folder_path)
-    results = []
-    for file_path in sorted(folder.rglob("*")):
-        if file_path.suffix.lower() in extensions:
+    candidates = [p for p in sorted(folder.rglob("*")) if p.suffix.lower() in extensions]
+    total = len(candidates)
+    results: list[dict] = []
+
+    for index, file_path in enumerate(candidates, start=1):
+        if should_cancel is not None and should_cancel():
+            print(f"[pipeline] Cancelled after {index - 1}/{total} documents.")
+            break
+
+        status, record, error = "failed", None, None
+        try:
+            record = process_document(str(file_path), upload_batch=upload_batch)
+            results.append(record)
+            if upload_batch and record.get("upload_batch") != upload_batch:
+                status = "duplicate"
+            else:
+                status = "ingested"
+        except Exception as e:  # noqa: BLE001 - log and continue; one bad file shouldn't kill the batch
+            error = e
+            print(f"[pipeline] Failed on {file_path}: {e}")
+
+        if on_progress is not None:
             try:
-                results.append(process_document(str(file_path), upload_batch=upload_batch))
-            except Exception as e:  # noqa: BLE001 - log and continue; one bad file shouldn't kill the batch
-                print(f"[pipeline] Failed on {file_path}: {e}")
+                on_progress(index, total, file_path, status, record, error)
+            except Exception as callback_error:  # noqa: BLE001
+                # A broken progress callback must never abort an ingestion run.
+                print(f"[pipeline] progress callback raised: {callback_error}")
+
     return results

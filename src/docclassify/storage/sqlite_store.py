@@ -87,6 +87,51 @@ def documents_in_batch(upload_batch: str) -> list[dict]:
         return [dict(r) for r in rows]
  
  
+def list_upload_batches() -> list[dict]:
+    """
+    Every batch present, newest first, with its document count.
+
+    The Reports view needs this: a batch id has to be chosen, and expecting a user
+    to remember and type one correctly is a guaranteed source of empty reports.
+    """
+    with get_connection() as conn:
+        rows = conn.execute(
+            """
+            SELECT upload_batch AS batch, COUNT(*) AS document_count,
+                   MIN(created_at) AS first_seen, MAX(created_at) AS last_seen
+            FROM documents
+            WHERE upload_batch IS NOT NULL AND upload_batch != ''
+            GROUP BY upload_batch
+            ORDER BY last_seen DESC
+            """
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+
+def category_counts() -> dict[str, int]:
+    """Document count per exact category_path, for display in the taxonomy tree."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT category_path, COUNT(*) AS n FROM documents GROUP BY category_path"
+        ).fetchall()
+        return {(r["category_path"] or ""): r["n"] for r in rows}
+
+
+def corpus_stats() -> dict:
+    """Headline counts for the status bar."""
+    with get_connection() as conn:
+        documents = conn.execute("SELECT COUNT(*) FROM documents").fetchone()[0]
+        categories = conn.execute("SELECT COUNT(*) FROM taxonomy").fetchone()[0]
+        pending = conn.execute(
+            "SELECT COUNT(*) FROM review_queue WHERE resolved = 0"
+        ).fetchone()[0]
+        batches = conn.execute(
+            "SELECT COUNT(DISTINCT upload_batch) FROM documents WHERE upload_batch IS NOT NULL"
+        ).fetchone()[0]
+    return {"documents": documents, "categories": categories,
+            "pending_review": pending, "batches": batches}
+
+
 def documents_in_category(category_path: str, limit: int | None = None) -> list[dict]:
     sql = "SELECT * FROM documents WHERE category_path = ?"
     params: tuple = (category_path,)

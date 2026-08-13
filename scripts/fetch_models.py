@@ -65,6 +65,30 @@ LID_URL = "https://dl.fbaipublicfiles.com/fasttext/supervised-models/lid.176.bin
 LID_FILENAME = "lid.176.bin"
 LID_APPROX_BYTES = 131_266_198  # ~131 MB; used only to detect a truncated download
 
+# EasyOCR's weights, which it would otherwise fetch from GitHub at runtime into
+# ~/.EasyOCR. Pulled into models/easyocr instead so they travel with the bundle and
+# ingestion/ocr.py can run with download_enabled=False. These are the two the
+# English/latin pipeline needs: the CRAFT text detector and the generation-2 latin
+# recogniser. Add more languages from easyocr/config.py if your corpus needs them.
+# URLs, filenames and checksums are copied verbatim from easyocr/config.py, because
+# EasyOCR re-verifies the MD5 when it loads each file and re-downloads on a mismatch —
+# which would defeat the whole point of vendoring them.
+EASYOCR_SUBDIR = "easyocr"
+EASYOCR_FILES = [
+    {
+        "url": "https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip",
+        "member": "craft_mlt_25k.pth",
+        "md5": "2f8227d2def4037cdb3b34389dcf9ec1",
+        "what": "CRAFT text detector (~80 MB)",
+    },
+    {
+        "url": "https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/latin_g2.zip",
+        "member": "latin_g2.pth",
+        "md5": "469869130aad1a34e8f9086f4262bc59",
+        "what": "latin recogniser, generation 2 (~15 MB)",
+    },
+]
+
 
 def _human(num_bytes: float) -> str:
     for unit in ("B", "KB", "MB", "GB"):
@@ -137,18 +161,66 @@ def download_lid(dest_root: Path) -> None:
     print(f"[lid] done ({_human(target.stat().st_size)})")
 
 
+def download_easyocr(dest_root: Path) -> None:
+    """
+    Vendors EasyOCR's detector and recogniser into models/easyocr so the OCR
+    fallback works with download_enabled=False.
+    """
+    import hashlib
+    import io
+    import zipfile
+
+    target_dir = dest_root / EASYOCR_SUBDIR
+    target_dir.mkdir(parents=True, exist_ok=True)
+
+    def md5_of(path: Path) -> str:
+        digest = hashlib.md5()
+        with open(path, "rb") as f:
+            for block in iter(lambda: f.read(1024 * 1024), b""):
+                digest.update(block)
+        return digest.hexdigest()
+
+    for spec in EASYOCR_FILES:
+        target = target_dir / spec["member"]
+        if target.exists() and md5_of(target) == spec["md5"]:
+            print(f"\n[easyocr] {spec['member']} already present and verified - skipping")
+            continue
+
+        print(f"\n[easyocr] {spec['what']}")
+        print(f"[easyocr] {spec['url']}")
+        with urllib.request.urlopen(spec["url"], timeout=300) as response:
+            payload = response.read()
+
+        # These releases are zips containing the single .pth file.
+        with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+            names = archive.namelist()
+            member = spec["member"] if spec["member"] in names else names[0]
+            target.write_bytes(archive.read(member))
+
+        actual = md5_of(target)
+        if actual != spec["md5"]:
+            target.unlink(missing_ok=True)
+            raise SystemExit(
+                f"[easyocr] MD5 mismatch for {spec['member']}: "
+                f"expected {spec['md5']}, got {actual}. Download aborted — EasyOCR "
+                "would reject this file and try to re-download it at runtime."
+            )
+        print(f"[easyocr] {spec['member']} -> {target}  ({_human(target.stat().st_size)}, MD5 OK)")
+
+
 def main():
     default_dest = Path(__file__).resolve().parents[1] / "models"
     parser = argparse.ArgumentParser(description=__doc__,
                                       formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--dest", default=str(default_dest),
                          help=f"Where to write the weights (default: {default_dest})")
-    parser.add_argument("--only", nargs="+", choices=["embedding", "reranker", "llm", "lid"],
-                         help="Fetch only these artifacts (default: all four)")
+    parser.add_argument("--only", nargs="+",
+                         choices=["embedding", "reranker", "llm", "lid", "easyocr"],
+                         help="Fetch only these artifacts (default: all five)")
     args = parser.parse_args()
 
     dest_root = Path(args.dest).resolve()
-    wanted = args.only or ["embedding", "reranker", "llm", "lid"]
+    wanted = args.only or ["embedding", "reranker", "llm", "lid", "easyocr"]
 
     print(f"Model destination: {dest_root}")
     print(f"Fetching: {', '.join(wanted)}")
@@ -156,6 +228,8 @@ def main():
     for key in wanted:
         if key == "lid":
             download_lid(dest_root)
+        elif key == "easyocr":
+            download_easyocr(dest_root)
         else:
             download_hf_model(key, dest_root)
 

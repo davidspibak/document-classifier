@@ -123,3 +123,27 @@ def all_category_vectors() -> list[dict]:
     """Small table (one row per taxonomy node) — safe to pull entirely into memory."""
     table = category_vectors_table()
     return table.to_pandas().to_dict(orient="records")
+
+
+def get_document_chunks(doc_id: str) -> list[dict]:
+    """Every chunk of one document, in reading order."""
+    table = chunk_vectors_table()
+    rows = table.search().where(f"doc_id = {sql_literal(doc_id)}").limit(100_000).to_list()
+    return sorted(rows, key=lambda r: r.get("chunk_index", 0))
+
+
+def get_document_text(doc_id: str) -> str:
+    """
+    Reassembles a document's text from its stored chunks.
+
+    The full text is never persisted anywhere — only chunks are — so anything that
+    needs the whole document (the on-demand summary, a UI preview) has to rebuild
+    it from here.
+
+    The overlap-aware reassembly lives in ingestion.chunking.join_chunks, next to the
+    chunk_text() it inverts, so the two cannot drift apart.
+    """
+    from docclassify.ingestion.chunking import join_chunks
+
+    chunks = get_document_chunks(doc_id)
+    return join_chunks([c.get("chunk_text", "") for c in chunks])
